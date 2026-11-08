@@ -45,6 +45,7 @@ async function seed() {
 
   // Drop and recreate tables for a clean seed
   sqlite.exec(`
+    DROP TABLE IF EXISTS course_ratings;
     DROP TABLE IF EXISTS video_watch_events;
     DROP TABLE IF EXISTS quiz_answers;
     DROP TABLE IF EXISTS quiz_attempts;
@@ -1403,6 +1404,23 @@ You've completed the Building REST APIs course. You now have the skills to build
 
   console.log("Created 7 enrollments.");
 
+  // ─── Course Ratings ───
+  // Only enrolled students rate. Some are left unrated on purpose so the
+  // rating form can be tried from scratch:
+  // - Sophia (course 1) and Olivia (course 2) have not rated yet.
+
+  db.insert(schema.courseRatings)
+    .values([
+      { userId: students[0].id, courseId: course1.id, rating: 5, createdAt: daysAgo(12), updatedAt: daysAgo(12) },
+      { userId: students[1].id, courseId: course1.id, rating: 4, createdAt: daysAgo(10), updatedAt: daysAgo(10) },
+      { userId: students[2].id, courseId: course1.id, rating: 4, createdAt: daysAgo(8), updatedAt: daysAgo(8) },
+      { userId: students[0].id, courseId: course2.id, rating: 4, createdAt: daysAgo(9), updatedAt: daysAgo(9) },
+      { userId: students[3].id, courseId: course2.id, rating: 3, createdAt: daysAgo(20), updatedAt: daysAgo(20) },
+    ])
+    .run();
+
+  console.log("Created 5 course ratings.");
+
   // ─── Lesson Progress ───
 
   // Helper to mark lessons as complete
@@ -1735,6 +1753,7 @@ You've completed the Building REST APIs course. You now have the skills to build
   );
   console.log("  Quizzes: 3");
   console.log("  Enrollments: 7");
+  console.log("  Course ratings: 5 (course 1 avg 4.3, course 2 avg 3.5)");
   console.log("  Purchases: 6 (5 individual + 1 team)");
   console.log("  Teams: 1 (with 5 coupons)");
 }

@@ -12,6 +12,8 @@ import { DevUI } from "~/components/dev-ui";
 import { getAllUsers, getUserById } from "~/services/userService";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
+import { getRatingSummariesForCourses } from "~/services/ratingService";
+import { StarRatingDisplay } from "~/components/star-rating";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -22,9 +24,12 @@ export function meta({}: Route.MetaArgs) {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const courses = buildCourseQuery(null, null, CourseStatus.Published, "newest", 50, 0);
-  const featured = courses.slice(0, 3).map((course) => ({
+  const featuredCourses = courses.slice(0, 3);
+  const ratings = getRatingSummariesForCourses(featuredCourses.map((c) => c.id));
+  const featured = featuredCourses.map((course) => ({
     ...course,
     lessonCount: getLessonCountForCourse(course.id),
+    rating: ratings.get(course.id) ?? { average: null, count: 0 },
   }));
   const categories = getAllCategories();
   const users = getAllUsers();
@@ -181,6 +186,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     <h3 className="font-semibold leading-snug group-hover:text-primary">
                       {course.title}
                     </h3>
+                    <StarRatingDisplay
+                      average={course.rating.average}
+                      count={course.rating.count}
+                      className="mt-1"
+                    />
                   </CardHeader>
                   <CardContent>
                     <p className="line-clamp-2 text-sm text-muted-foreground">

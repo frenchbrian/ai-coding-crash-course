@@ -42,6 +42,12 @@ import { formatDuration, formatPrice } from "~/lib/utils";
 import { renderMarkdown } from "~/lib/markdown.server";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice, getCountryTierInfo } from "~/lib/ppp";
+import {
+  getCourseRatingSummary,
+  getUserRatingForCourse,
+  rateCourse,
+} from "~/services/ratingService";
+import { StarRatingDisplay, StarRatingInput } from "~/components/star-rating";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const title = loaderData?.course?.title ?? "Course";
@@ -71,11 +77,13 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   let progress = 0;
   let lessonProgressMap: Record<number, string> = {};
   let nextLessonId: number | null = null;
+  let userRating: number | null = null;
 
   if (currentUserId) {
     enrolled = isUserEnrolled(currentUserId, course.id);
 
     if (enrolled) {
+      userRating = getUserRatingForCourse(currentUserId, course.id);
       progress = calculateProgress(currentUserId, course.id, false, false);
 
       const progressRecords = getLessonProgressForCourse(
@@ -113,10 +121,39 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     currentUserId,
     pppPrice,
     tierInfo,
+    rating: getCourseRatingSummary(course.id),
+    userRating,
   };
 }
 
-// No action — enrollment is handled via the purchase confirmation page
+// Enrollment is handled via the purchase confirmation page.
+// The only action here is submitting a star rating.
+export async function action({ params, request }: Route.ActionArgs) {
+  const currentUserId = await getCurrentUserId(request);
+  if (!currentUserId) {
+    throw data("You must be logged in to rate a course.", { status: 401 });
+  }
+
+  const course = getCourseBySlug(params.slug);
+  if (!course) {
+    throw data("Course not found", { status: 404 });
+  }
+
+  const formData = await request.formData();
+  if (formData.get("intent") !== "rate") {
+    return data({ error: "Unknown action." }, { status: 400 });
+  }
+
+  try {
+    rateCourse(currentUserId, course.id, Number(formData.get("rating")));
+    return { success: true };
+  } catch (e) {
+    return data(
+      { error: e instanceof Error ? e.message : "Failed to save rating." },
+      { status: 400 }
+    );
+  }
+}
 
 export function HydrateFallback() {
   return (
@@ -181,6 +218,8 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
     currentUserId,
     pppPrice,
     tierInfo,
+    rating,
+    userRating,
   } = loaderData;
   const isInstructor = currentUserId === course.instructorId;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -301,7 +340,8 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
         <p className="mb-4 text-lg text-muted-foreground">
           {course.description}
         </p>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+          <StarRatingDisplay average={rating.average} count={rating.count} />
           <span className="flex items-center gap-1.5">
             <UserAvatar
               name={course.instructorName}
@@ -413,6 +453,12 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
                       Buy More Seats
                     </Button>
                   </Link>
+                  <div className="border-t pt-4">
+                    <h3 className="mb-2 text-sm font-semibold">
+                      Rate this course
+                    </h3>
+                    <StarRatingInput currentRating={userRating} />
+                  </div>
                 </>
               ) : (
                 enrollButton
